@@ -6,32 +6,47 @@ package com.example;
 public class Wave {
     private String waveType; // { sinusoidal, triangular, sawtooth, rectangular, whiteNoise, redNoise }
     private double frequency;
+    private double baseFreq;
     private double amplification;
+    private double percentageFreq=100;
 
     private double fCyclePosition=0;
     private double fCycleInc;
 
     public Wave() {}
 
-    public Wave(String waveType, double frequency, double amplification) {
+    public Wave(String waveType, double frequency, double amplification, double percentageFreq) {
         this.waveType = waveType;
-        this.frequency = frequency;
+        this.percentageFreq = percentageFreq;
+        this.baseFreq = frequency;
+        this.frequency = baseFreq*(percentageFreq/100);
         this.amplification = amplification;
 
         this.fCycleInc = this.frequency/44100;
+//        System.out.println(this.baseFreq + " " + this.frequency + " " + this.fCycleInc);
     }
 
     public double getFrequency() {
         return frequency;
     }
 
+    public double getBaseFreq() {
+        return baseFreq;
+    }
+
     public void setFrequency(double frequency) {
-        this.frequency = frequency;
+        this.baseFreq = frequency;
+        this.frequency = baseFreq*(percentageFreq/100);
         this.fCycleInc = this.frequency/44100;
+//        System.out.println(this.baseFreq + " " + this.frequency + " " + this.fCycleInc);
     }
 
     public String getWaveType() {
         return this.waveType;
+    }
+
+    public double getPercentageFreq() {
+        return this.percentageFreq;
     }
 
     public void setWaveType(String waveType) {

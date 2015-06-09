@@ -1,7 +1,6 @@
 package com.example;
 
 import javax.swing.*;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -15,6 +14,7 @@ public class Main {
 
     public static double frequency;
     public static double amplification;
+    public static double percentageFreq;
     public static double resQ;
     public static double cutOffFreq;
     public static LowPassFilter filter;
@@ -22,14 +22,11 @@ public class Main {
     public static ArrayList<Wave> wavesList = new ArrayList<Wave>();
     public static DefaultListModel model = new DefaultListModel();
     public static JList jlistWaves = new JList(model);
-    private static AudioThread m_thread;
+    private static AudioThread tones_thread = null;
+    private static AudioThread ocean_thread = null;
+    private static Wave oceanWave;
 
     public static void main(String[] args) {
-        m_thread = new AudioThread(wavesList);
-        m_thread.BUFFER_DURATION = 0.100;
-        m_thread.lpfilter = filter;
-        m_thread.start();
-
         final JFrame f = new JFrame();
         f.setTitle("Generator");
         f.setLayout(new FlowLayout(FlowLayout.CENTER));
@@ -43,7 +40,7 @@ public class Main {
         f.add(jpanelFreqAmpli);
         f.add(jpanelFilter);
         f.add(jpanelWindow);
-        f.setSize(250, 530);
+        f.setSize(250, 655);
 
         jpanelWindow.setLayout(new FlowLayout(FlowLayout.CENTER));
         jpanelFreqAmpli.setLayout(new FlowLayout(FlowLayout.CENTER));
@@ -51,7 +48,7 @@ public class Main {
         jpanelRemove.setLayout(new FlowLayout(FlowLayout.CENTER));
 
         jpanelWindow.setPreferredSize(new Dimension(230, 150));
-        jpanelFreqAmpli.setPreferredSize(new Dimension(150, 190));
+        jpanelFreqAmpli.setPreferredSize(new Dimension(150, 320));
         jpanelFilter.setPreferredSize(new Dimension(150, 150));
 
         jlistWaves.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
@@ -76,6 +73,8 @@ public class Main {
 
         final JLabel jlabelAmplification = new JLabel("Amplification");
         final JTextField jtextfieldAmplification = new JTextField(10);
+        jtextfieldAmplification.setText("1");
+        amplification=1;
         jtextfieldAmplification.setHorizontalAlignment(JTextField.LEFT);
         jtextfieldAmplification.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
@@ -109,6 +108,22 @@ public class Main {
             }
         });
 
+        final JLabel jlabelPercentage = new JLabel("% frequency");
+        final JTextField jtextfieldPercentage = new JTextField(10);
+        jtextfieldPercentage.setText("100");
+        percentageFreq = 100;
+        jtextfieldPercentage.setHorizontalAlignment(JTextField.LEFT);
+
+        jtextfieldPercentage.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    percentageFreq = Double.parseDouble(jtextfieldPercentage.getText());
+                } catch (Exception z) {
+                    JOptionPane.showMessageDialog(f, "Error! Type numbers.");
+                }
+            }
+        });
+
         final JLabel jlabelCutOff = new JLabel("Cut off frequency");
         final JTextField jtextfieldCutOff = new JTextField(10);
         jtextfieldCutOff.setHorizontalAlignment(JTextField.LEFT);
@@ -126,15 +141,42 @@ public class Main {
         JButton jbuttonGenerate = new JButton("Generate");
         jbuttonGenerate.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
+                percentageFreq = Double.parseDouble(jtextfieldPercentage.getText());
                 String print = "Frequency: " + String.valueOf(frequency) + ", wavetype: " + wavetype + ", amplification: " + String.valueOf(amplification);
                 System.out.println(print);
-                Wave newWave = new Wave(wavetype, frequency, amplification);
+                Wave newWave = new Wave(wavetype, frequency, amplification, percentageFreq);
                 wavesList.add(newWave); //add wave to array jlistWaves
-                model.add(wavesList.size() - 1, newWave.getWaveType() + " " + newWave.getFrequency() + " / " + newWave.getAmplification()); //add description of wave to jlist
+                model.add(wavesList.size() - 1, newWave.getWaveType() + " " + newWave.getBaseFreq() + "*" + newWave.getPercentageFreq() + "% / " + newWave.getAmplification()); //add description of wave to jlist
             }
         });
 
-        JButton jbuttonRemove = new JButton("Remove");   // new instance of button to
+        JButton jbuttonUpdate = new JButton("UPDATE");
+        jbuttonUpdate.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                for (int i=0; i<wavesList.size(); i++) {
+                    wavesList.get(i).setFrequency(frequency);
+                    model.set(i, wavesList.get(i).getWaveType() + " " + wavesList.get(i).getBaseFreq() + "*" + wavesList.get(i).getPercentageFreq() + "% / " + wavesList.get(i).getAmplification()); //add description of wave to jlist
+                }
+            }
+        });
+
+        final JButton jbuttonTurnOnFilter = new JButton("On");
+        jbuttonTurnOnFilter.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                if (tones_thread.lpfilter == null) {
+                    tones_thread.lpfilter = new LowPassFilter();
+                    tones_thread.lpfilter.setResonanceQ(resQ);
+                    tones_thread.lpfilter.setCutOff(cutOffFreq);
+                    tones_thread.lpfilter.setSamplingFreq(44100);
+                    jbuttonTurnOnFilter.setText("Off");
+                } else {
+                    tones_thread.lpfilter = null;
+                    jbuttonTurnOnFilter.setText("On");
+                }
+            }
+        });
+
+        JButton jbuttonRemove = new JButton("Remove");
         jbuttonRemove.addActionListener(new ActionListener() {  // actionlistener for
             public void actionPerformed(ActionEvent e) {
                 int selectedIndex = jlistWaves.getSelectedIndex();
@@ -145,18 +187,47 @@ public class Main {
             }
         });
 
-        final JButton jbuttonTurnOnFilter = new JButton("On");
-        jbuttonTurnOnFilter.addActionListener(new ActionListener() {
+        final JButton jbuttonPlay = new JButton("PLAY");
+        jbuttonPlay.addActionListener(new ActionListener() {  // actionlistener for
             public void actionPerformed(ActionEvent e) {
-                if (m_thread.lpfilter == null) {
-                    m_thread.lpfilter = new LowPassFilter();
-                    m_thread.lpfilter.setResonanceQ(resQ);
-                    m_thread.lpfilter.setCutOff(cutOffFreq);
-                    m_thread.lpfilter.setSamplingFreq(44100);
-                    jbuttonTurnOnFilter.setText("Off");
+                if (tones_thread == null) {
+                    tones_thread = new AudioThread(wavesList);
+                    tones_thread.BUFFER_DURATION = 0.100;
+                    tones_thread.lpfilter = filter;
+                    tones_thread.start();
+                    jbuttonPlay.setText("STOP");
                 } else {
-                    m_thread.lpfilter = null;
-                    jbuttonTurnOnFilter.setText("On");
+                    tones_thread.exit();
+                    tones_thread = null;
+                    jbuttonPlay.setText("PLAY");
+                }
+            }
+        });
+
+        final JButton jbuttonOcean = new JButton("Generate ocean");
+        jbuttonOcean.addActionListener(new ActionListener() {  // actionlistener for
+            public void actionPerformed(ActionEvent e) {
+                if (ocean_thread == null) {
+                    Wave oceanWave = new Wave(); //create new wave
+                    oceanWave.setFrequency(400); //set its frequency
+                    oceanWave.setWaveType("White Noise"); //set its type
+                    oceanWave.setAmplification(1);
+                    wavesList.add(oceanWave); //add wave to array list
+                    model.add(wavesList.size() - 1, "Ocean"); //add description of wave to jlist
+
+                    ocean_thread = new AudioThread(wavesList);
+                    ocean_thread.BUFFER_DURATION = 0.08;
+                    ocean_thread.ocean = 1;
+                    ocean_thread.start();
+                    jbuttonOcean.setText("STOP");
+                } else {
+                    int index=wavesList.size()-1;
+                    wavesList.remove(index);
+                    model.removeElementAt(index);
+                    ocean_thread.ocean=0;
+                    ocean_thread.exit();
+                    ocean_thread = null;
+                    jbuttonOcean.setText("Generate ocean");
                 }
             }
         });
@@ -165,14 +236,20 @@ public class Main {
         jpanelWindow.add(jpanelRemove);
 
         jpanelRemove.add(jbuttonRemove);
+        jpanelRemove.add(jbuttonPlay);
 
         jpanelFreqAmpli.add(jlabelFrequency);
         jpanelFreqAmpli.add(jtextfieldFrequency);
         jpanelFreqAmpli.add(jlabelAmplification);
         jpanelFreqAmpli.add(jtextfieldAmplification);
+        jpanelFreqAmpli.add(jbuttonOcean);
+        jpanelFreqAmpli.add(jlabelPercentage);
+        jpanelFreqAmpli.add(jtextfieldPercentage);
         jpanelFreqAmpli.add(jlabelWaveTypes);
         jpanelFreqAmpli.add(jcomboboxWaveTypes);
         jpanelFreqAmpli.add(jbuttonGenerate);
+        jpanelFreqAmpli.add(jbuttonUpdate);
+        jpanelFreqAmpli.add(jbuttonOcean);
 
         jpanelFilter.add(jlabelResonance);
         jpanelFilter.add(jtextfieldResonance);

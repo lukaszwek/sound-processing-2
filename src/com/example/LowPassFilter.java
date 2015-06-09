@@ -7,6 +7,8 @@ public class LowPassFilter {
     private double cutOffFrequency;
     public double max;
 
+    private double[] lastTwo = {0, 0};
+
     public double[][] LPFprocess(double[][] buffer) {
         double y1, y2, x, x1, x2;
         double a0, a1, a2, b1, b2;
@@ -25,9 +27,9 @@ public class LowPassFilter {
         b2 = ((1-alpha)*r);
 
         output[0][0]=0;
-        output[0][1]=buffer[0][1];
+        output[0][1]=lastTwo[0];
         output[1][0]=1;
-        output[1][1]=buffer[1][1];
+        output[1][1]=lastTwo[1];
 
         double max1=0;
         for (int i=2; i<buffer.length; i++) {
@@ -39,12 +41,20 @@ public class LowPassFilter {
 
             output[i][0] = i;
             output[i][1] = (a0*x + a1*x1 + a2*x2 - b1*y1 - b2*y2);
-            if (output[i][1]>max1) {
-                max1 = output[i][1];
-            }
+
+
+            if (i == buffer.length-2)
+                lastTwo[0] = output[i][1];
+            else if (i == buffer.length-1)
+                lastTwo[1] = output[i][1];
+
+//            if (output[i][1]>max1) {
+//                max1 = output[i][1];
+//            }
         }
 
-        this.max = max1;
+//        this.max = max1;
+        this.max = 3.0;
         return output;
     }
 

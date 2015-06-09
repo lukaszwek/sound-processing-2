@@ -10,7 +10,7 @@ import java.util.ArrayList;
 public class AudioThread extends Thread {
     final static public int SAMPLING_RATE = 44100;
     final static public int SAMPLE_SIZE = 2;                 //Sample size in bytes
-    static public double BUFFER_DURATION = 0.500;      //About a 100ms buffer
+    static public double BUFFER_DURATION = 0.08;      //About a 100ms buffer
     final static public int PACKET_SIZE = (int)(BUFFER_DURATION*SAMPLING_RATE*SAMPLE_SIZE);
 
     public static ArrayList<Wave> waves;
@@ -19,6 +19,7 @@ public class AudioThread extends Thread {
     public double totalAmplification;
     public boolean bExitThread = false;
     public LowPassFilter lpfilter;
+    public static int ocean;
 
 
     public AudioThread(ArrayList<Wave> waves){
@@ -66,17 +67,19 @@ public class AudioThread extends Thread {
                 totalAmplification+=waves.get(wavesNo).getAmplification();
             }
 
-            //Generate SINE_PACKET_SIZE samples based on the current fCycleInc from fFreq
+            //Generate PACKET_SIZE samples based on the current fCycleInc from fFreq
             Wave wav;
             double result=0;
             double finalResult=0;
             double[][]visualize= new double[PACKET_SIZE/SAMPLE_SIZE][2];
+            double[][]visualize2= new double[PACKET_SIZE/SAMPLE_SIZE][2];
 
             for (int i=0; i < PACKET_SIZE/SAMPLE_SIZE; i++) {
                 result=0;
                 finalResult=0;
                 for (int n=0; n<waves.size();n++){ //read the value at certain point of each wave to be mixed
                     wav=waves.get(n);		//get the n-th wave
+//                    result=(wav.getResult()*waves.get(n).getAmplification())/totalAmplification;//get the result and include amplification
                     result=(wav.getResult()*waves.get(n).getAmplification())/totalAmplification;//get the result and include amplification
                     finalResult+=result;		//summing the value at desired point
                 }
@@ -85,11 +88,26 @@ public class AudioThread extends Thread {
                 //cBuf.putShort((short)(Short.MAX_VALUE*finalResult)); //pushing data after mixing to a buffer
             }
 
-            if (lpfilter!=null){
+            if (ocean==1)
+            {
+                lpfilter=new LowPassFilter();
+                lpfilter.setResonanceQ(3);
+                double temp = 300 + 200*Generator.generateWavSound(1,"LFO");
+                if (temp<0)
+                    temp = 0;
+//                System.out.println("Cutoff frequency: " + temp);
+                lpfilter.setCutOff(temp);
+                lpfilter.setSamplingFreq(44100);
                 visualize=lpfilter.LPFprocess(visualize);
-
                 for (int cos=0; cos<visualize.length; cos++){
                     cBuf.putShort((short)(Short.MAX_VALUE*visualize[cos][1]/lpfilter.max));
+                }
+            }
+            else if (lpfilter!=null){
+                visualize2=lpfilter.LPFprocess(visualize);
+
+                for (int cos=0; cos<visualize2.length; cos++){
+                    cBuf.putShort((short)(Short.MAX_VALUE*visualize2[cos][1]/lpfilter.max));
                 }
             }
             else
